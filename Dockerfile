@@ -33,13 +33,16 @@ COPY . .
 # Install PHP dependencies
 RUN composer install --no-interaction --optimize-autoloader --no-dev
 
-# Generate key (will be overwritten by env if needed)
-RUN php artisan key:generate --no-interaction
+# Create .env file if it doesn't exist (for key generation)
+RUN if [ ! -f .env ]; then cp .env.example .env; fi
+
+# Generate key (--force to overwrite if exists)
+RUN php artisan key:generate --no-interaction --force || true
 
 # Cache configurations
-RUN php artisan config:cache
-RUN php artisan route:cache
-RUN php artisan view:cache
+RUN php artisan config:cache || true
+RUN php artisan route:cache || true
+RUN php artisan view:cache || true
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
@@ -86,12 +89,19 @@ stderr_logfile_maxbytes=0' > /etc/supervisor/conf.d/laravel.conf
 
 # Create migration script
 RUN echo '#!/bin/bash\n\
-echo "Waiting for database connection..."\n\
+echo "========================================="\n\
+echo "Démarrage de l'API Réseau Social"\n\
+echo "========================================="\n\
+echo ""\n\
+echo "1. Attente de la base de données..."\n\
 sleep 5\n\
-echo "Running migrations..."\n\
+echo "2. Exécution des migrations..."\n\
 php artisan migrate --force\n\
-echo "Migrations completed"\n\
-echo "Starting supervisor..."\n\
+echo "3. Optimisation du cache..."\n\
+php artisan config:cache\n\
+php artisan route:cache\n\
+php artisan view:cache\n\
+echo "4. Démarrage des services..."\n\
 exec /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf' > /var/www/start.sh
 
 RUN chmod +x /var/www/start.sh
